@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  player
+  venue_manager
+}
+
+enum SkillLevel {
+  beginner
+  intermediate
+  advanced
+}
+
+enum AvailabilitySlotStatus {
+  available
+  reserved
+  cancelled
+}
+
+enum MatchFormat {
+  singles
+  doubles
+}
+
+enum MatchVisibility {
+  public
+  invite
+}
+
+enum MatchStatus {
+  forming
+  open
+  ready_to_book
+  booked
+  cancelled
+}
+
+enum MatchSpotStatus {
+  open
+  filled
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  cancelled
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  playerProfile       PlayerProfile?
+  venueManagerProfile VenueManagerProfile?
+  venues              Venue[]
+  createdMatches      Match[]              @relation("MatchCreator")
+  matchSpots          MatchSpot[]
+  bookings            Booking[]
+
+  @@map("users")
+}
+
+model PlayerProfile {
+  userId      String     @id @map("user_id") @db.Uuid
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName String     @map("display_name")
+  skillLevel  SkillLevel @map("skill_level")
+  bio         String?    @db.VarChar(280)
+  location    Unsupported("geography(Point,4326)")?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("player_profiles")
+}
+
+model VenueManagerProfile {
+  userId      String   @id @map("user_id") @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName String   @map("display_name")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("venue_manager_profiles")
+}
+
+model Venue {
+  id          String   @id @default(uuid()) @db.Uuid
+  managerId   String   @map("manager_id") @db.Uuid
+  manager     User     @relation(fields: [managerId], references: [id])
+  name        String
+  address     String
+  description String?
+  location    Unsupported("geography(Point,4326)")?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  courts      Court[]
+
+  @@map("venues")
+}
+
+model Court {
+  id      String  @id @default(uuid()) @db.Uuid
+  venueId String  @map("venue_id") @db.Uuid
+  venue   Venue   @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name    String
+  surface String?
+  slots   AvailabilitySlot[]
+
+  @@map("courts")
+}
+
+model AvailabilitySlot {
+  id         String                 @id @default(uuid()) @db.Uuid
+  courtId    String                 @map("court_id") @db.Uuid
+  court      Court                  @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  startsAt   DateTime               @map("starts_at")
+  endsAt     DateTime               @map("ends_at")
+  status     AvailabilitySlotStatus @default(available)
+  priceCents Int?                   @map("price_cents")
+  bookings   Booking[]
+
+  @@index([status, startsAt])
+  @@map("availability_slots")
+}
+
+model Match {
+  id         String          @id @default(uuid()) @db.Uuid
+  creatorId  String          @map("creator_id") @db.Uuid
+  creator    User            @relation("MatchCreator", fields: [creatorId], references: [id])
+  format     MatchFormat
+  visibility MatchVisibility
+  inviteCode String?         @unique @map("invite_code")
+  skillLevel SkillLevel      @map("skill_level")
+  status     MatchStatus     @default(forming)
+  notes      String?
+  location   Unsupported("geography(Point,4326)")?
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+  spots      MatchSpot[]
+  bookings   Booking[]
+
+  @@map("matches")
+}
+
+model MatchSpot {
+  id       String          @id @default(uuid()) @db.Uuid
+  matchId  String          @map("match_id") @db.Uuid
+  match    Match           @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  playerId String?         @map("player_id") @db.Uuid
+  player   User?           @relation(fields: [playerId], references: [id])
+  status   MatchSpotStatus @default(open)
+  position Int
+
+  @@map("match_spots")
+}
+
+model Booking {
+  id                 String        @id @default(uuid()) @db.Uuid
+  matchId            String        @map("match_id") @db.Uuid
+  match              Match         @relation(fields: [matchId], references: [id])
+  availabilitySlotId String        @unique @map("availability_slot_id") @db.Uuid
+  availabilitySlot   AvailabilitySlot @relation(fields: [availabilitySlotId], references: [id])
+  status             BookingStatus @default(pending)
+  createdById        String        @map("created_by_id") @db.Uuid
+  createdBy          User          @relation(fields: [createdById], references: [id])
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  @@map("bookings")
+}
