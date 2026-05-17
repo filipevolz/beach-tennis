@@ -226,14 +226,15 @@ describe('BookingService', () => {
     );
   });
 
-  it('confirm returns existing booking when already confirmed', async () => {
+  it('confirm rejects already confirmed booking with SLOT_NOT_AVAILABLE', async () => {
     prisma.booking.findUnique.mockResolvedValue({
       ...booking,
       status: BookingStatus.confirmed,
     });
 
-    const result = await service.confirm('booking-1', 'creator-1');
-    expect(result.status).toBe(BookingStatus.confirmed);
+    await expect(service.confirm('booking-1', 'creator-1')).rejects.toMatchObject({
+      response: { code: 'SLOT_NOT_AVAILABLE' },
+    });
     expect(prisma.availabilitySlot.updateMany).not.toHaveBeenCalled();
   });
 });

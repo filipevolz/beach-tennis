@@ -96,7 +96,10 @@ export class BookingService implements IBookingService {
         }
 
         if (existing.status === BookingStatus.confirmed) {
-          return existing;
+          throw new ConflictException({
+            code: 'SLOT_NOT_AVAILABLE',
+            message: 'Booking is already confirmed',
+          });
         }
 
         if (existing.availabilitySlot.status !== AvailabilitySlotStatus.available) {
